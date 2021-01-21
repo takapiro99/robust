@@ -19,23 +19,23 @@ import general
 # t t a 
 #               Example Sequence Control on UDP Header
 
-# only needs 2 bits
+# 1 byte
 class SCUPacketType(Enum):
-    Data = 0
-    DataEnd = 1
-    Rtr = 2
-    Fin = 3
-    RtrMul = 4
+    Data = 0 # data, fileID, seqno
+    DataEnd = 1 # end of the data, fileID, seqno
+    Rtr = 2 # retry request, fileID, null // list of seqs in body
+    Fin = 3 # file完成したよ, fileID, null
 
 class SCUHeader:
     # def __init__(self, id, seq):
     #     self.id = id
     #     self.seq = seq
-
     def from_raw(self, raw):
         self.typ = int.from_bytes(raw[0:1], "big")
         self.id = int.from_bytes(raw[1:3], "big")
         self.seq = int.from_bytes(raw[3:4], "big")
+        # print(int.from_bytes(raw, "big"))
+        print(raw, self.typ, self.id, self.seq)
 
     def raw(self):
         raw = self.typ.to_bytes(1, "big")

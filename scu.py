@@ -81,9 +81,9 @@ class SCU:
             # create header
             header = SCUHeader()
             if seq == len(data_fragments) - 1:
-                header.from_dict({ "typ": SCUPacketType.DataEnd.value, "id": id, "seq": seq, })
+                header.from_dict({ "typ": SCUPacketType.DataEnd.value, "id": id, "seq": seq,"resendID": 1 })
             else:
-                header.from_dict({ "typ": SCUPacketType.Data.value, "id": id, "seq": seq, })
+                header.from_dict({ "typ": SCUPacketType.Data.value, "id": id, "seq": seq,"resendID": 1 })
             # create packet
             packet = SCUPacket()
             packet.from_dict({ "header": header, "payload": df, })
@@ -137,7 +137,7 @@ class SCU:
 
                 key = utils.endpoint2str(from_addr, packet.header.id)
                 if key not in self.received_files_data:
-                    self.received_files_data[key] = [b""]*100
+                    self.received_files_data[key] = [b""]*150
                     received_files_flag[key] = False
 
                 if received_files_flag[key]:
@@ -181,14 +181,14 @@ class SCU:
             raise Exception
         if typ == SCUPacketType.Rtr.value:
             header = SCUHeader()
-            header.from_dict({ "typ": typ, "id": id, "seq": rtr, })
+            header.from_dict({ "typ": typ, "id": id, "seq": rtr,"resendID": 1})
             packet = SCUPacket()
             packet.from_dict({ "header": header, "payload": b'', })
             self.socket.sendto(packet.raw(), addr)
 
         elif typ == SCUPacketType.Fin.value:
             header = SCUHeader()
-            header.from_dict({ "typ": typ, "id": id, "seq": rtr, })
+            header.from_dict({ "typ": typ, "id": id, "seq": rtr, "resendID": 1})
             packet = SCUPacket()
             packet.from_dict({ "header": header, "payload": b'', })
             self.socket.sendto(packet.raw(), addr)
