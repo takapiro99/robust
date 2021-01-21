@@ -10,25 +10,17 @@ def main():
         scu.bind_as_sender(receiver_address=("localhost", 8888))
         try:
             # serial
-            for id in range(0, 1000):
-                scu.send(f"./data/data{id}", id)
-                print(f"file sent: {id}", end="\r")
-
-            # parallel
-            # threads = []
+            # first just try with data0!
+            scu.send("./data/data0", 0)
+            print(f"file sent: 0")
             # for id in range(0, 1000):
-            #     threads.append(threading.Thread(target = scu.send(f"data/data{id}", id)))
-            #     threads[-1].setDaemon(True)
-            #     threads[-1].start()
-
-            # for th in threads:
-            #     th.join()
+            #     scu.send(f"./data/data{id}", id)
+            #     print(f"file sent: {id}", end="\r")
         except Exception as e:
             print(e)
-            scu.drop() # なくても大丈夫だとは思うけど一応安全のため
+            scu.drop() # just in case
 
     elif sys.argv[1] == "receiver":
-        # TODO
         scu = SCU(mtu = 1500)
         # scu.bind_as_receiver(receiver_address = ("169.254.155.219", 8888))
         scu.bind_as_receiver(receiver_address = ("localhost", 8888))

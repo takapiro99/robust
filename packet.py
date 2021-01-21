@@ -13,9 +13,9 @@ import general
 
 # 0                   1                   2                   3
 # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-# |      typ      |              id               |      seq      |
-# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+# |      typ      |              id               |      seq      |    resendID   |
+# +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 # t t a 
 #               Example Sequence Control on UDP Header
 
@@ -23,8 +23,9 @@ import general
 class SCUPacketType(Enum):
     Data = 0 # data, fileID, seqno
     DataEnd = 1 # end of the data, fileID, seqno
-    Rtr = 2 # retry request, fileID, null // list of seqs in body
+    Rtr = 2 # retry request, fileID, null, resendID // list of seqs in body
     Fin = 3 # file完成したよ, fileID, null
+    End = 4
 
 class SCUHeader:
     # def __init__(self, id, seq):
@@ -34,19 +35,22 @@ class SCUHeader:
         self.typ = int.from_bytes(raw[0:1], "big")
         self.id = int.from_bytes(raw[1:3], "big")
         self.seq = int.from_bytes(raw[3:4], "big")
+        self.resendID = int.from_bytes(raw[4:5], "big")
         # print(int.from_bytes(raw, "big"))
-        print(raw, self.typ, self.id, self.seq)
+        # print(raw, self.typ, self.id, self.seq)
 
     def raw(self):
         raw = self.typ.to_bytes(1, "big")
         raw += self.id.to_bytes(2, "big")
         raw += self.seq.to_bytes(1, "big")
+        raw += self.resendID.to_bytes(1, "big")
         return raw
 
     def from_dict(self, dict):
         self.typ = dict["typ"]
         self.id = dict["id"]
         self.seq = dict["seq"]
+        self.resendID = dict["resendID"]
 
 class SCUPacket:
     # def __init__(self, header, payload):
