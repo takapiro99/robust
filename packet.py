@@ -2,19 +2,30 @@ from enum import Enum
 
 import general
 
+# 4 bytes for scu header
+# 32bits
+
+# 8 bits for type needs 2 bits, 6 bits free
+# 16 bits for id 11bitsあればよい, 5 bits free
+# 8 bits for seq 256あれば十分、そのままやんけ
+
+# 11 bits for free
+
 # 0                   1                   2                   3
 # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 # |      typ      |              id               |      seq      |
 # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#
+# t t a 
 #               Example Sequence Control on UDP Header
 
+# only needs 2 bits
 class SCUPacketType(Enum):
     Data = 0
     DataEnd = 1
     Rtr = 2
     Fin = 3
+    RtrMul = 4
 
 class SCUHeader:
     # def __init__(self, id, seq):

@@ -2,6 +2,7 @@ from queue import Queue
 import socket
 import threading
 from enum import Enum
+import random
 
 from packet import SCUPacketType, SCUHeader, SCUPacket
 import utils
@@ -51,6 +52,9 @@ class SCU:
             try:
                 packet = SCUPacket()
                 packet.from_raw(self.socket.recv(2048))
+                # psuedo packet loss
+                if random.random() >= 0.5:
+                    continue
                 if packet.header.id not in self.connection_manager:
                     continue
                 if packet.header.typ == SCUPacketType.Fin.value:
@@ -105,7 +109,6 @@ class SCU:
                             break
                 with self.lock: # 複数のsendメソッドが並列に同時実行されている可能性があるため，ロックが必要
                     self.socket.sendto(all_packets[seq].raw(), self.receiver_address) # パケット送信
-
                 seq = max(seq + 1, retransmit_seq) # seq更新
                 if seq >= len(all_packets):
                     seq = retransmit_seq
@@ -126,6 +129,9 @@ class SCU:
         while True:
             try:
                 data, from_addr = self.socket.recvfrom(2048)
+                # psuedo packet loss
+                if random.random() >= 0.5:
+                    continue
                 packet = SCUPacket()
                 packet.from_raw(data)
 
