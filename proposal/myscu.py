@@ -3,10 +3,12 @@ import socket
 import threading
 from enum import Enum
 import random
+import time
 
 from packet import SCUPacketType, SCUHeader, SCUPacket
 import utils
 
+n = 10
 
 class SCUMode(Enum):
     SendMode = 0
@@ -14,7 +16,7 @@ class SCUMode(Enum):
 
 
 class RecvMode(Enum):
-    WaitNewFile = 0
+    WaitNewFileUntilDataEndComes = 0
     SendMissingSeqsUntilAnyResponseComes = 1
     RecvUntilEndComes = 2
     RecvUntilFileCompletes = 3  # missing が n 個以下になったら発動することにする
@@ -33,6 +35,7 @@ class NewSCU:
     def __init__(self, mtu=1500):
         self.mtu = mtu
         self.current_fileno = 0
+        self.missing_seqs_str = ""
 
     def bind_as_sender(self, receiver_address):
         self.mode = SCUMode.SendMode
@@ -50,10 +53,10 @@ class NewSCU:
     def bind_as_receiver(self, receiver_address):
         self.mode = SCUMode.RecvMode
         self.received_files_data = {}
-        self.receive_mode = RecvMode.WaitNewFile
+        self.receive_mode = RecvMode.WaitNewFileUntilDataEndComes
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(receiver_address)
-
+        self.receiver_address = receiver_address
         self.file_received = Queue()
         self.task_manager = Queue()
 
@@ -91,22 +94,22 @@ class NewSCU:
                     import traceback
                     traceback.print_exc()
 
-    def send(self, filepath, id):  # will lock the thread
+    def send(self, filepath, fileno):  # will lock the thread
         if self.mode == SCUMode.RecvMode:
             raise Exception
         queue = Queue()
-        self.connection_manager[id] = queue  # register queue
+        self.connection_manager[fileno] = queue  # register queue
         data_fragments = utils.split_file_into_mtu(filepath, self.mtu)
         all_packets = []
-        count = 0
+        current_resendID = 0
         for (seq, df) in enumerate(data_fragments):
             header = SCUHeader()
             if seq == len(data_fragments) - 1:
                 header.from_dict(
-                    {"typ": SCUPacketType.DataEnd.value, "id": id, "seq": seq, "resendID": 0})
+                    {"typ": SCUPacketType.DataEnd.value, "id": fileno, "seq": seq, "resendID": 0})
             else:
                 header.from_dict(
-                    {"typ": SCUPacketType.Data.value, "id": id, "seq": seq, "resendID": 0})
+                    {"typ": SCUPacketType.Data.value, "id": fileno, "seq": seq, "resendID": 0})
             packet = SCUPacket()
             packet.from_dict({"header": header, "payload": df})
             all_packets.append(packet)
@@ -114,8 +117,7 @@ class NewSCU:
         # send all data "once" (first of all)
         for seq in range(len(all_packets)):
             with self.lock:  # lock
-                self.socket.sendto(
-                    all_packets[seq].raw(), self.receiver_address)
+                self.socket.sendto(all_packets[seq].raw(), self.receiver_address)
         self.send_mode = SendMode.KeepSendingDataEndUntilResendReqComes
 
         while True:  # main loop
@@ -123,54 +125,85 @@ class NewSCU:
                 pass
             elif self.send_mode == SendMode.KeepSendingDataEndUntilResendReqComes:
                 dataEnd = all_packets[-1]
-                count = 0
                 while True:
-                    if count>10: # WIP
-                        self.send_mode = SendMode.SendMissingSeqs
-                        continue
                     with self.lock:  # lock
                         self.socket.sendto(
                             dataEnd.raw(), self.receiver_address)
-                    count += 1
                     try:
-                        # TODO: get a packet from queue
-                        pass
+                        packet = queue.get(block=False)  # 再送要求か受信完了報告か
                     except Exception as e:
                         pass  # no packets in queue
                     else:
-                        pass
-                        # queueを見て何かしらの再送要求が来てたら
-                        # modeをSendMissingSeqsにする
+                        if packet.header.typ == SCUPacketType.Rtr and packet.header.resendID > 1:
+                            current_resendID = packet.header.resendID
+                            self.missing_seqs_str = packet.payload
+                            self.send_mode = SendMode.SendMissingSeqs
             elif self.send_mode == SendMode.SendMissingSeqs:
+                missing_seqs = map(int, self.missing_seqs_str.split(","))
                 # 言われてた欠損ファイルを一回送る、それか二周送る
-                # 送り終わったらmodeをKeepSendingEndUntilResendReqComesにする
-                pass
+                for i in range(len(missing_seqs) - 1):
+                    data = all_packets[fileno][missing_seqs[i]]
+                    data.header.resendID = current_resendID
+                    with self.lock:  # lock
+                        self.socket.sendto(data.raw(), self.receiver_address)
+                end_packet = all_packets[fileno][missing_seqs[-1]]
+                end_packet.header.resendID = current_resendID
+                end_packet.header.typ = SCUPacketType.End
+                self.end_packet = end_packet
+                self.send_mode = SendMode.KeepSendingEndUntilResendReqComes
             elif self.send_mode == SendMode.KeepSendingEndUntilResendReqComes:
-                # endを送る
-                # queueを見て、次の再送要求が来たら
-                # もし長さがn以下だったらSendingMissingSeqLoop,
-                # そうでなければmodeをSendMissingSeqsにする。
-                pass
+                while True:
+                    # 送る
+                    with self.lock:  # lock
+                        self.socket.sendto(self.end_packet.raw(), self.receiver_address)
+                    # 新しいresend requestが来る
+                    try:
+                        packet = self.task_manager.get(block=False)
+                    except Exception as e:  # queue is empty
+                        if e == KeyboardInterrupt:
+                            raise KeyboardInterrupt
+                        else:
+                            pass
+                    else:  # when any incoming packet
+                        if packet.header.typ == SCUPacketType.Rtr and packet.header.resendID > 1:
+                            current_resendID = packet.header.resendID
+                            self.missing_seqs_str = packet.payload
+                            if len(packet.payload.split(',')) <= 10:
+                                self.send_mode = SendMode.SendingMissingSeqLoop
+                            else:
+                                self.send_mode = SendMode.SendMissingSeqs
             elif self.send_mode == SendMode.SendingMissingSeqLoop:
-                # TODO: キューからパケットを取り出し、finが来るのを待つ。
-                # finが来たら次のファイルに行く。というよりも return する。
+                # send missing thing loop 
+                # with self.lock:  # lock
+                #     self.socket.sendto(self.None.raw(), self.receiver_address)
+                try:
+                    packet = self.task_manager.get(block=False)
+                except Exception as e:  # queue is empty
+                    if e == KeyboardInterrupt:
+                        raise KeyboardInterrupt
+                    else:
+                        pass
+                else:  
+                    if packet.header.typ == SCUPacketType.Fin and packet.header.id == fileno:
+                        del(self.connection_manager[id]) # コネクションを解除
+                        return
                 pass
             else:
                 raise Exception
 
     def _receiver_controller(self):
-        initial_resendID = 0
+        def store_data(key, seq, payload):
+            self.received_files_data[key][seq] = payload
+        initial_resendID = 1
         received_files_flag = {}
         file_lengths = {}
         resend_id_count = {}
         while True:  # main loop
-            # DataEndが来たらmodeをmissing送るくんに変える。dataendのパケットを破棄し続けつつmissingのパケットを送り続ける。
-            # resendIDが一致したものが来たら、modeをrecvUntilEndComesに切り替える
-            if self.receive_mode == RecvMode.WaitNewFile:
+            if self.receive_mode == RecvMode.WaitNewFileUntilDataEndComes:
                 try:
                     while True:
                         try:
-                            packet, from_addr = self.task_manager.get(
+                            packet = self.task_manager.get(
                                 block=False)
                             # もし古い情報が来たら、(最新のファイルじゃなかったら)パケットを破棄。continue
                             if self.current_fileno != packet.header.id:
@@ -180,30 +213,37 @@ class NewSCU:
                             if e == KeyboardInterrupt:
                                 raise KeyboardInterrupt
                             else:
-                                # print('waiting RecvMode.WaitNewFile but queue was empty')
+                                # print('waiting RecvMode.WaitNewFileUntilDataEndComes but queue was empty')
                                 break
                         else:  # when try succeeds. if there are incoming packets
                             # print(packet, from_addr)
                             if key not in self.received_files_data:
                                 # 新規登録。記念すべき1seq目
-                                self.received_files_data[key] = [b""]*100
+                                self.received_files_data[key] = [b""]*200
                                 received_files_flag[key] = False
+                            # TODO: ここでファイル揃ったか確認する必要あるか？
                             if packet.header.typ == SCUPacketType.DataEnd.value or packet.header.typ == SCUPacketType.Data.value:
-                                # just save
-                                self.received_files_data[key][packet.header.seq] = packet.payload
-                                # dataEndだったら保存し、次のモードへ。 break.
+                                store_data(key, packet.header.seq, packet.payload)
+                                # dataEndだったら次のモードへ。 break.
                                 if packet.header.typ == SCUPacketType.DataEnd.value:
                                     if key not in file_lengths:
                                         print('received dataEnd of file:', key)
+                                        # seq の数
                                         file_lengths[key] = packet.header.seq + 1
                                         resend_id_count[key] = initial_resendID
                                         # missing seqs
-                                        unreceived_seqs_str = self.calculate_rtr(
+                                        unreceived_seqs_str, missing_seqs_count = self.calculate_rtr(
                                             key, packet.header.seq)
                                         print(unreceived_seqs_str)
+                                        self.missing_seqs_str = unreceived_seqs_str
+                                        if resend_id_count[key] == 255:
+                                            resend_id_count[key] = 1
+                                        else:
+                                            resend_id_count[key] += 1
                                         self.receive_mode = RecvMode.SendMissingSeqsUntilAnyResponseComes
+                                        break
                             else:
-                                pass  # ありえんかもー
+                                print("ignored at RecvMode.WaitNewFileUntilDataEndComes", self.packet_info(packet))  # ありえんかもー
                 except Exception as e:  # sendtoが失敗した時は(適当)
                     if e == KeyboardInterrupt:
                         raise KeyboardInterrupt
@@ -211,28 +251,100 @@ class NewSCU:
                         import traceback
                         traceback.print_exc()
             elif self.receive_mode == RecvMode.SendMissingSeqsUntilAnyResponseComes:
-                pass
                 # 再送要求を送る
-                # queueを見てresendIDを含むものが来てたら送るのをやめる。
-                # そして RecvUntilEndComes にモードを変える。
+                if random.random() >= 0.5:
+                    self.response(self, SCUPacketType.Rtr, self.receiver_address, self.current_fileno,
+                              0, resend_id_count[self.current_fileno], self.missing_seqs_str)
+                # TODO: 若干待つ？
+                try:
+                    # queueを見る
+                    packet = self.task_manager.get(
+                        block=False)
+                except Exception as e:  # when queue is empty
+                    if e == KeyboardInterrupt:
+                        raise KeyboardInterrupt
+                    else:
+                        pass
+                else:  # when any incoming packet
+                    key = packet.header.id
+                    # 求めているresendidのパケットが来たら次のモードへ。
+                    if self.current_fileno == key and packet.header.resendID == resend_id_count[key]:
+                        store_data(key, packet.header.seq, packet.payload)
+                        self.receive_mode = RecvMode.RecvUntilEndComes
+                    else:
+                        continue
             elif self.receive_mode == RecvMode.RecvUntilEndComes:
-                # print("recvUntilEndComes")
-                pass
-                # endが来るまでqueueから取り出し、保存する。
-                # endを見つけたら、その時点で足りないパケットの数がn個以下だったら
-                #    # RecvUntilFileCompletesに、
-                # そうでなければ SendMissingSeqsUntilAnyResponseComes に変える。
+                try:
+                    packet = self.task_manager.get(
+                        block=False)
+                except Exception as e:  # when queue is empty
+                    if e == KeyboardInterrupt:
+                        raise KeyboardInterrupt
+                    else:
+                        pass
+                else:  # when any incoming packet
+                    store_data(packet.header.id,
+                               packet.header.seq, packet.payload)
+                    if packet.header.typ == SCUPacketType.End:
+                        unreceived_seqs_str, missing_seq_count = self.calculate_rtr(
+                            packet.header.id, packet.header.seq)
+                        print(unreceived_seqs_str)
+                        self.missing_seqs_str = unreceived_seqs_str
+                        # そのresendIDのやつはdone.
+                        # endが来るまでqueueから取り出し、保存する。
+                        # endを見つけたら、その時点で足りないパケットの数がn個以下だったら
+                        #    # RecvUntilFileCompletesに、
+                        # そうでなければ SendMissingSeqsUntilAnyResponseComes に変える。
             elif self.receive_mode == RecvMode.RecvUntilFileCompletes:
-                print("aaa")
-                # パケットが来るごとに全部出来上がったかを確認し、
-                # 完成したら SendFinUntilNextFileComes に変える。
+                try:
+                    pass
+                except Exception as e:
+                    pass
+                else:
+                    pass
+                finally:
+                    # パケットが来るごとに全部出来上がったかを確認し、
+                    # 完成したら SendFinUntilNextFileComes に変える。
+                    pass
+                    #  check
                 # そしてこれ
                 # self.file_received.put((key, received_files_length[key]))
+            elif self.receive_mode == RecvMode.SendFinUntilNextFileComes:
+                # finを送る
+                self.response(self, SCUPacketType.Fin, self.receiver_address, self.current_fileno,
+                              0, 0, None)
+                # TODO: ちょっと待つ？
+                pass
+                try:
+                    packet = self.task_manager.get(
+                        block=False)
+                    # 次のファイルじゃなかったらスルー
+                    if self.current_fileno + 1 != packet.header.id:
+                        continue
+                except Exception as e:  # when queue is empty
+                    if e == KeyboardInterrupt:
+                        raise KeyboardInterrupt
+                    else:
+                        break
+                else:  # 新しいファイル来たー
+                    key = packet.header.id
+                    if key not in self.received_files_data:
+                        # 新規登録。記念すべき1seq目
+                        self.received_files_data[key] = [b""]*200
+                        received_files_flag[key] = False
+                    self.missing_seqs_str = ""
+                    # パケット置き場を確保
+                    # パケットを保存
+                    # 次のモードへ。
             else:
-                raise Exception
+                raise Exception("incorrect receive mode")
 
-    # receives packet, unpack it and add to Queue (task_manager)
-    # adds (packet, from_addr) to queue
+    def packet_info(packet):
+        msg = f"file: {packet.header.id}, seq: {packet.header.seq}, typ: {packet.header.typ}"
+        return msg
+
+    # receives packet, unpack it
+    # adds (packet, from_addr) to queue (task_manager)
     def _receiver_packet_loop(self):
         if self.mode == SCUMode.SendMode:
             raise Exception
@@ -244,10 +356,8 @@ class NewSCU:
                     continue
                 packet = SCUPacket()
                 packet.from_raw(data)
-                # key = utils.endpoint2str(from_addr, packet.header.id)
-                # putting it to task_manager Queue() (<Packet>, fileno, from_addr)
-                self.task_manager.put(
-                    (packet, from_addr))
+                # putting it to task_manager Queue() (<Packet>, from_addr)
+                self.task_manager.put(packet)
             except Exception as e:  # when recv fails
                 if e == KeyboardInterrupt:
                     raise KeyboardInterrupt
@@ -256,19 +366,30 @@ class NewSCU:
                     traceback.print_exc()
 
     def calculate_rtr(self, key, seq):
+        """
+        returns (string of missing seqs joined with ",", count of missing seqs)
+        """
         unreceived_seqs = []
         for sq in range(0, seq):
             if not self.received_files_data[key][sq]:
                 unreceived_seqs.append(str(sq))
-        return ",".join(unreceived_seqs)
+        return (",".join(unreceived_seqs), len(unreceived_seqs))
 
     def is_all_received(self, key, length):
+        """
+        checks if all seqs are received with given key and file(seq) length
+        """
         for i in range(0, length):
             if not self.received_files_data[key][i]:
                 return False
         return True
 
     def response(self, typ, addr, id, rtr, resendID, *content):
+        """
+        responses a single packet of retry, or fin.
+
+        it can be used to just send packets.
+        """
         if self.mode == SCUMode.SendMode:
             raise Exception
         if typ == SCUPacketType.Rtr.value:

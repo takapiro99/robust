@@ -1,7 +1,7 @@
 import sys
 # import threading
 import utils
-from scu import SCU
+# from .scu import SCU
 from myscu import NewSCU
 # from gpiozero import LED
 
@@ -12,7 +12,7 @@ def main():
         myscu = NewSCU(mtu=1500)
         # scu.bind_as_sender(receiver_address=("169.254.229.153", 8888))
         myscu.bind_as_sender(receiver_address=("localhost", 8888))
-        myscu.send("./data/data0", 0)
+        myscu.send("./proposal/data/data0", 0)
         print("file0 sent!")
         # try:
         #     for id in range(0, 1000):

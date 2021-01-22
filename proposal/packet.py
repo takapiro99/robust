@@ -16,8 +16,12 @@ import general
 # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 # |      typ      |              id               |      seq      |    resendID   |
 # +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-# t t a 
-#               Example Sequence Control on UDP Header
+#  
+#               Custom Sequence Control on UDP Header
+# - typ      :
+# - id       : file number
+# - seq      : 
+# - resendID : enabled when 1-255. unabled when 0.
 
 # 1 byte
 class SCUPacketType(Enum):

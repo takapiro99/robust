@@ -1,12 +1,18 @@
 recv:
-	python3 main.py receiver
+	python3 ./proposal/main.py receiver
 
 send:
-	python3 main.py sender
+	python3 ./proposal/main.py sender
 
 send5:
-	timeout 5 python3 main.py sender
+	timeout 5 python3 ./proposal/main.py sender
 
-cmp:
-	python3 cmp.py
+recv/example:
+	python3 ./example/main.py receiver
+
+send/example:
+	python3 ./example/main.py sender
+
+cmp/example:
+	python3 ./proposal/cmp.py
 
