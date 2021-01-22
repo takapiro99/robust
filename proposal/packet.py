@@ -32,9 +32,9 @@ class SCUPacketType(Enum):
     End = 4
 
 class SCUHeader:
-    # def __init__(self, id, seq):
-    #     self.id = id
-    #     self.seq = seq
+    def __init__(self, id=None, seq=None):
+        self.id = id
+        self.seq = seq
     def from_raw(self, raw):
         self.typ = int.from_bytes(raw[0:1], "big")
         self.id = int.from_bytes(raw[1:3], "big")
@@ -57,9 +57,9 @@ class SCUHeader:
         self.resendID = dict["resendID"]
 
 class SCUPacket:
-    # def __init__(self, header, payload):
-    #     self.header = header
-    #     self.payload = payload
+    def __init__(self, header=SCUHeader(), payload=b""):
+        self.header = header
+        self.payload = payload
 
     def from_raw(self, raw):
         header = SCUHeader()

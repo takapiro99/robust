@@ -12,16 +12,16 @@ def main():
         myscu = NewSCU(mtu=1500)
         # scu.bind_as_sender(receiver_address=("169.254.229.153", 8888))
         myscu.bind_as_sender(receiver_address=("127.0.0.1", 50001))
-        # myscu.send("./proposal/data/data0", 0)
-        # print("file0 sent!")
-        try:
-            for id in range(0, 1000):
-                myscu.send(f"./proposal/data/data{id}", id)
-                # After sending file, change to receiver to recevier IDs. 
-                print(f"file sent: {id}", end="\r")
-        except Exception as e:
-            print(e)
-            myscu.drop() # just in case
+        myscu.send("./proposal/data/data0", 0)
+        print("file0 sent!")
+        # try:
+        #     for id in range(0, 1000):
+        #         myscu.send(f"./proposal/data/data{id}", id)
+        #         # After sending file, change to receiver to recevier IDs. 
+        #         print(f"file sent: {id}", end="\r")
+        # except Exception as e:
+        #     print(e)
+        #     myscu.drop() # just in case
 
     elif sys.argv[1] == "receiver":
         myscu = NewSCU(mtu = 1500)
