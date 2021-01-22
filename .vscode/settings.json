@@ -1,0 +1,13 @@
+{
+  "python.analysis.extraPaths": ["./proposal", "./example"],
+  "python.formatting.autopep8Args": [
+    "--line-length 150",
+    "--experimental"
+  ],
+  "extensions.ignoreRecommendations": true,
+  "files.autoSave": "off",
+  "typescript.tsc.autoDetect": "off",
+  "npm.autoDetect": "off",
+  "debug.allowBreakpointsEverywhere": true,
+  "html.autoClosingTags": false
+}

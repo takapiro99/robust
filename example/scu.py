@@ -126,6 +126,7 @@ class SCU:
         while True:
             try:
                 data, from_addr = self.socket.recvfrom(2048)
+                print(from_addr)
                 packet = SCUPacket()
                 packet.from_raw(data)
 
