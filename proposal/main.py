@@ -31,6 +31,7 @@ def main():
         for i in range(0, 1000):
             filedata = myscu.recv()
             utils.write_file(f"./proposal/hanakoData/data{i}", filedata)
+            del(myscu.received_files_data[i])
             print(f"file received: {i}")
 
 if __name__ == '__main__':
