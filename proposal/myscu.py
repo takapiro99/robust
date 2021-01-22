@@ -81,10 +81,6 @@ class NewSCU:
             try:
                 packet = SCUPacket()
                 packet.from_raw(self.socket.recv(2048))
-                # if packet.header.typ == SCUPacketType.Fin.value:
-                #     print(packet.header.__dict__, "o!!!")
-                #     print(self.send_mode)
-                #     time.sleep(1) #worked
                 # psuedo packet loss TODO: remove
                 if random.random() >= 0.5:
                     continue
@@ -119,7 +115,6 @@ class NewSCU:
             packet = SCUPacket()
             packet.from_dict({"header": header, "payload": df})
             all_packets.append(packet)
-
         while True:  # main loop
             if self.send_mode == SendMode.SendNewFile:
                 # first of all send all data "once"
@@ -173,11 +168,9 @@ class NewSCU:
                             pass
                     else:
                         if packet.header.typ == SCUPacketType.Rtr.value and packet.header.resendID > current_resendID:
-                            print('hi')
                             current_resendID = packet.header.resendID
                             self.missing_seqs_str = packet.payload.decode()
                             missing_seqs_count = len(self.missing_seqs_str.split(','))
-                            print(packet.header.typ, packet.header.resendID, missing_seqs_count)
                             if missing_seqs_count <= n:
                                 self.send_mode = SendMode.SendingMissingSeqLoopUntilFinComes
                                 break
@@ -206,6 +199,7 @@ class NewSCU:
                             continue
                     else: 
                         if packet.header.typ == SCUPacketType.Fin.value and packet.header.id == fileno:
+                            self.send_mode = SendMode.SendNewFile
                             del(self.connection_manager[fileno]) # コネクションを解除
                             # break
                             return
@@ -219,7 +213,6 @@ class NewSCU:
         received_files_flag = {}
         file_lengths = {}
         resend_id_count = {}
-        RecvUntilFileCompletes = False
         while True:  # main loop
             if self.receive_mode == RecvMode.WaitNewFileUntilDataEndComes:
                 try:
@@ -248,12 +241,10 @@ class NewSCU:
                                         resend_id_count[key] = initial_resendID
                                         unreceived_seqs_str, missing_seqs_count = self.calculate_rtr(key, packet.header.seq)
                                         self.missing_seqs_str = unreceived_seqs_str
-                                        print(f"file:{key}, missing: {unreceived_seqs_str}")
+                                        # print(f"file:{key}, missing: {unreceived_seqs_str}")
                                         self.sender_address = from_addr
                                         self.receive_mode = RecvMode.SendMissingSeqsUntilAnyResponseComes
                                         break
-                            else:
-                                print("non data typ packet came here", self.packet_info(packet))
                 except Exception as e:  # sendtoが失敗した時は(適当)
                     if e == KeyboardInterrupt:
                         raise KeyboardInterrupt
@@ -297,19 +288,15 @@ class NewSCU:
                                 resend_id_count[key] = resend_id_count[key] + 1
                             unreceived_seqs, missing_seqs_count = self.calculate_rtr(packet.header.id, packet.header.seq)
                             self.missing_seqs_str = unreceived_seqs
-                            print(unreceived_seqs, resend_id_count[key])
                             if not unreceived_seqs and self.is_all_received(key, file_lengths[key]):
                                 self.receive_mode = RecvMode.SendFinUntilNextFileComes
                                 break
-                            # print(self.missing_seqs_str.split(","), resend_id_count[key])
                             if len(self.missing_seqs_str.split(",")) <= n:
-                                print("ddsf", resend_id_count[key])
                                 self.receive_mode = RecvMode.RecvUntilLastResendComes
                                 break
                             self.receive_mode = RecvMode.SendMissingSeqsUntilAnyResponseComes
                             break
             elif self.receive_mode == RecvMode.RecvUntilLastResendComes:
-                print(resend_id_count[self.current_fileno], self.missing_seqs_str)
                 while True:
                     # 再送要求を送る
                     if random.random() >= 0.5:
@@ -352,16 +339,13 @@ class NewSCU:
                     if e == KeyboardInterrupt:
                         raise KeyboardInterrupt
                     else:
-                        break
+                        pass
+                        # continue
                 else:  # 新しいファイル来たー?
                     if self.current_fileno + 1 == packet.header.id:
-                        # print(packet.header.__dict__)
                         key = packet.header.id
-                        print(key)
                         # if key==1:
-                        print('happy')
                         if key not in self.received_files_data:
-                            print('happy!', key)
                             # 新規登録。記念すべき1seq目
                             self.received_files_data[key] = [b""]*200
                             store_data(key, packet.header.seq, packet.payload)
@@ -380,7 +364,7 @@ class NewSCU:
     # receives packet, unpack it
     # adds (packet, from_addr) to queue (task_manager)
     def _receiver_packet_loop(self):
-        # prev_packet = SCUPacket()
+        prev_packet = SCUPacket()
         if self.mode == SCUMode.SendMode:
             raise Exception
         while True:
@@ -392,9 +376,9 @@ class NewSCU:
                     continue
                 packet = SCUPacket()
                 packet.from_raw(data)
-                # if prev_packet.__dict__ == packet.__dict__:
-                #     continue
-                # prev_packet = packet
+                if prev_packet.__dict__ == packet.__dict__:
+                    continue
+                prev_packet = packet
                 # putting it to task_manager Queue() (<Packet>, from_addr)
                 self.task_manager.put((packet, from_addr))
             except Exception as e:  # when recv fails
