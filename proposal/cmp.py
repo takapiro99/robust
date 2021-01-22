@@ -6,15 +6,15 @@ import os
 filepath_list = []
 
 received_list = []
-for file in os.listdir("./data"):
-    filepath = os.path.join("./data", file)
+for file in os.listdir("./proposal/hanakoData"):
+    filepath = os.path.join("./proposal/hanakoData", file)
     if os.path.isfile(filepath):
         filepath_list.append(filepath)
         with open(filepath, mode='rb') as f:
             received_list.append(hashlib.md5(f.read()).hexdigest())
 
 check_list = []
-with open("check.md5", mode='r') as f:
+with open("./proposal/check.md5", mode='r') as f:
     for line in f:
         check_list.append(line.split()[0])
 

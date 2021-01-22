@@ -4,6 +4,9 @@ recv:
 send:
 	python3 ./proposal/main.py sender
 
+cmp:
+	python3 ./proposal/cmp.py
+
 send5:
 	timeout 5 python3 ./proposal/main.py sender
 

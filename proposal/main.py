@@ -29,7 +29,7 @@ def main():
         myscu.bind_as_receiver(receiver_address = ("localhost", 8888))
         for i in range(0, 1000):
             filedata = myscu.recv()
-            utils.write_file(f"./data/data{i}", filedata)
+            utils.write_file(f"./hanakoData/data{i}", filedata)
             print(f"file received: {i}")
 
 if __name__ == '__main__':
