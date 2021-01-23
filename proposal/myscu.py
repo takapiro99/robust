@@ -77,9 +77,9 @@ class NewSCU:
             try:
                 packet = SCUPacket()
                 packet.from_raw(self.socket.recv(2048))
-                # psuedo packet loss TODO: remove
-                if random.random() >= 0.5:
-                    continue
+                # # psuedo packet loss TODO: remove
+                # if random.random() >= 0.5:
+                #     continue
                 if packet.header.id not in self.connection_manager:
                     continue
                 if prev_packet.header.__dict__ == packet.__dict__:
@@ -376,10 +376,10 @@ class NewSCU:
         while True:
             try:
                 data, from_addr = self.socket.recvfrom(2048)
-                # # TODO: remove this
-                # psuedo packet loss
-                if random.random() >= 0.5:
-                    continue
+                # # # TODO: remove this
+                # # psuedo packet loss
+                # if random.random() >= 0.5:
+                #     continue
                 packet = SCUPacket()
                 packet.from_raw(data)
                 if prev_packet.__dict__ == packet.__dict__:
