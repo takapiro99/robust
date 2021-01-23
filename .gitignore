@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 
-/data/*
+**/data/*
 
-check.md5
+*.md5
+
+proposal/hanakoData/*
+
+log/
