@@ -5,6 +5,7 @@ from enum import Enum
 
 from packet import SCUPacketType, SCUHeader, SCUPacket
 import utils
+import random
 
 class SCUMode(Enum):
     SendMode = 0
@@ -51,6 +52,10 @@ class SCU:
             try:
                 packet = SCUPacket()
                 packet.from_raw(self.socket.recv(2048))
+                # # TODO: remove this
+                # psuedo packet loss
+                if random.random() >= 0.5:
+                    continue
                 if packet.header.id not in self.connection_manager:
                     continue
                 if packet.header.typ == SCUPacketType.Fin.value:
@@ -126,10 +131,12 @@ class SCU:
         while True:
             try:
                 data, from_addr = self.socket.recvfrom(2048)
-                print(from_addr)
                 packet = SCUPacket()
                 packet.from_raw(data)
-
+                # TODO: remove this
+                # psuedo packet loss
+                if random.random() >= 0.5:
+                    continue
                 key = utils.endpoint2str(from_addr, packet.header.id)
                 if key not in self.received_files_data:
                     self.received_files_data[key] = [b""]*100

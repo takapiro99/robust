@@ -1,24 +1,16 @@
 import sys
-# import threading
 import utils
-# from .scu import SCU
 from myscu import NewSCU
-# from gpiozero import LED
 
 
 def main():
     if sys.argv[1] == "sender":
-        # scu = SCU(mtu=1500)
         myscu = NewSCU(mtu=1500)
         # scu.bind_as_sender(receiver_address=("169.254.229.153", 8888))
         myscu.bind_as_sender(receiver_address=("127.0.0.1", 50001))
-        # myscu.send("./proposal/data/data0", 0)
-        # print("file0 sent!")
-        # myscu.send("./proposal/data/data1", 1)
         try:
             for id in range(0, 1000):
                 myscu.send(f"./proposal/data/data{id}", id)
-                # After sending file, change to receiver to recevier IDs. 
                 print(f"file sent: {id}", end="\r")
         except Exception as e:
             print(e)
@@ -36,18 +28,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# think_outside_the_box = True
-# if think_outside_the_box:
-#     gpio_thread = threading.Thread(
-#         target=yis)
-#     gpio_thread.setDaemon(True)
-#     gpio_thread.start()
-
-
-# def yis():
-#     led = LED(17)
-#     while True:
-#         #echo 0 > /sys/class/gpio/gpio17/value
-
-#         led.off()

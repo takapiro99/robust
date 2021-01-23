@@ -113,9 +113,12 @@ class NewSCU:
             all_packets.append(packet)
         while True:  # main loop
             if self.send_mode == SendMode.SendNewFile:
-                for seq in range(len(all_packets)):
+                for seq in range(len(all_packets) - 1):
                     with self.lock:
                         self.socket.sendto(all_packets[seq].raw(), self.receiver_address)
+                # for seq in range(len(all_packets) - 1):
+                #     with self.lock:
+                #         self.socket.sendto(all_packets[seq].raw(), self.receiver_address)
                 self.send_mode = SendMode.KeepSendingDataEndUntilResendReqComes
             elif self.send_mode == SendMode.KeepSendingDataEndUntilResendReqComes:
                 dataEnd = all_packets[-1]
