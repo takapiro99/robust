@@ -3,6 +3,8 @@
 import hashlib
 import os
 
+MD5_FILE = "./proposal/check.md5"
+
 filepath_list = []
 
 received_list = []
@@ -14,7 +16,7 @@ for file in os.listdir("./proposal/hanakoData"):
             received_list.append(hashlib.md5(f.read()).hexdigest())
 
 check_list = []
-with open("./proposal/check.md5", mode='r') as f:
+with open(MD5_FILE, mode='r') as f:
     for line in f:
         check_list.append(line.split()[0])
 
